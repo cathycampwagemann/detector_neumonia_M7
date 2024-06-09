@@ -65,6 +65,11 @@ def predict():
 
         return jsonify({"respuesta": result})
 
+# Servir el archivo index.html en la ruta raíz '/'
+@app.route('/')
+def index():
+    return app.send_static_file('index.html')
+
 # Ejecutar la aplicación
 if __name__ == '__main__':
     app.run(debug=True)
