@@ -7,7 +7,8 @@ import tempfile
 from google.cloud import storage
 from modelo import CustomDenseNet, procesar_imagen, predecir_neumonia
 
-app = Flask(__name__)
+# Crear la instancia de la aplicación Flask con la configuración de la carpeta estática
+app = Flask(__name__, static_folder='static')
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
@@ -64,7 +65,6 @@ def predict():
 
         return jsonify({"respuesta": result})
 
-    return jsonify({"error": "Formato de archivo no válido"}), 400
-
+# Ejecutar la aplicación
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(debug=True)
