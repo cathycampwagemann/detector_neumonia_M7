@@ -33,6 +33,9 @@ modelo = CustomDenseNet(num_classes=2)
 modelo.load_state_dict(torch.load(destination_file_name, map_location=device))
 modelo.to(device)
 
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'jpeg'}
+
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'photo' not in request.files:
@@ -46,7 +49,7 @@ def predict():
         filename = photos.save(photo)
         imagen_path = os.path.join(app.config['UPLOADED_PHOTOS_DEST'], filename)
 
-        imagen_tensor = procesar_imagen(image_path)
+        imagen_tensor = procesar_imagen(imagen_path)
         if imagen_tensor is None:
             return jsonify({"error": "Error al procesar la imagen"}), 500
 
