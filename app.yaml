@@ -1,7 +1,2 @@
 runtime: python39
 entrypoint: python api.py
-
-handlers:
-- url: /modelo.py
-  static_files: modelo.py
-  upload: modelo.py
