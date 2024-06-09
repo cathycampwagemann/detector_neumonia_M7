@@ -1,4 +1,5 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
+from flask_uploads import UploadSet, configure_uploads, IMAGES
 import cv2
 import torch
 import os
@@ -8,7 +9,10 @@ from modelo import CustomDenseNet, procesar_imagen, predecir_neumonia
 
 app = Flask(__name__)
 
-# Función para descargar el modelo desde Google Cloud Storage
+photos = UploadSet('photos', IMAGES)
+app.config['UPLOADED_PHOTOS_DEST'] = 'uploads'
+configure_uploads(app, photos)
+
 def download_model(bucket_name, source_blob_name, destination_file_name):
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
@@ -31,23 +35,18 @@ modelo.to(device)
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'file' not in request.files:
-        return jsonify({"error": "No se indicó el nombre del archivo"}), 400
+    if 'photo' not in request.files:
+        return jsonify({"error": "No se indicó el archivo de imagen"}), 400
 
-    file = request.files['file']
+    photo = request.files['photo']
+    if photo.filename == '':
+        return jsonify({"error": "No se seleccionó ningún archivo"}), 400
 
-    # Guardar el archivo temporalmente
-    with tempfile.NamedTemporaryFile(delete=False) as temp:
-        temp_image_path = temp.name
-        file.save(temp_image_path)
+    if photo and allowed_file(photo.filename):
+        filename = photos.save(photo)
+        imagen_path = os.path.join(app.config['UPLOADED_PHOTOS_DEST'], filename)
 
-    try:
-        # Leer y procesar la imagen
-        imagen = cv2.imread(temp_image_path)
-        if imagen is None:
-            return jsonify({"error": f"No se pudo leer la imagen en la ruta: {temp_image_path}"}), 400
-
-        imagen_tensor = procesar_imagen(temp_image_path)
+        imagen_tensor = procesar_imagen(image_path)
         if imagen_tensor is None:
             return jsonify({"error": "Error al procesar la imagen"}), 500
 
@@ -61,9 +60,11 @@ def predict():
 
         return jsonify({"respuesta": result})
 
-    finally:
-        # Asegurarse de eliminar el archivo temporal
-        os.remove(temp_image_path)
+    return jsonify({"error": "Formato de archivo no válido"}), 400
+
+@app.route('/')
+def upload_form():
+    return render_template('upload.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
