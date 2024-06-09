@@ -6,6 +6,20 @@ from modelo import CustomDenseNet, procesar_imagen, predecir_neumonia
 
 app = Flask(__name__)
 
+def download_model(bucket_name, source_blob_name, destination_file_name):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(source_blob_name)
+    blob.download_to_filename(destination_file_name)
+    print(f"Downloaded storage object {source_blob_name} from bucket {bucket_name} to local file {destination_file_name}.")
+
+bucket_name = 'mejormodelo'
+source_blob_name = 'mejor_modelo.pth'
+destination_file_name = 'mejor_modelo.pth'
+
+# Descargar el modelo antes de cargarlo
+download_model(bucket_name, source_blob_name, destination_file_name)
+
 # Se carga el modelo
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 modelo = CustomDenseNet(num_classes=2)
@@ -19,25 +33,21 @@ def predict():
 
     file = request.files['file']
     nombre_imagen = file.filename
-    carpeta_principal_imagenes = request.form.get('carpeta_principal_imagenes')
 
-    if not carpeta_principal_imagenes:
-        return jsonify({"error": "No se indicó la carpeta_principal_imagenes"}), 400
+    with tempfile.NamedTemporaryFile(delete=False) as temp:
+        temp_image_path = temp.name
+        file.save(temp_image_path)
 
-    if not os.path.exists(carpeta_principal_imagenes):
-        return jsonify({"error": "La carpeta especificada no existe"}), 400
-
-    temp_image_path = os.path.join(carpeta_principal_imagenes, nombre_imagen)
-    file.save(temp_image_path)
-    print(f"Imagen guardada temporalmente en: {temp_image_path}")
-    if not os.path.isfile(temp_image_path):
-        return jsonify({"error": f"No se pudo guardar la imagen en la ruta: {temp_image_path}"}), 400
+    try:
+        imagen = cv2.imread(temp_image_path)
+        if imagen is None:
+            return jsonify({"error": f"No se pudo leer la imagen en la ruta: {temp_image_path}"}), 400
 
     imagen = cv2.imread(temp_image_path)
     if imagen is None:
         return jsonify({"error": f"No se pudo leer la imagen en la ruta: {temp_image_path}"}), 400
 
-    imagen_tensor = procesar_imagen(temp_image_path,carpeta_principal_imagenes)
+    imagen_tensor = procesar_imagen(temp_image_path)
     if imagen_tensor is None:
         return jsonify({"error": "Error al procesar la imagen"}), 500
 
@@ -51,6 +61,9 @@ def predict():
         result = "La imagen no muestra signos de neumonía."
 
     return jsonify({"respuesta": result})
+
+finally:
+    os.remove(temp_image_path)
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
