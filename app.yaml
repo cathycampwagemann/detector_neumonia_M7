@@ -8,5 +8,5 @@ handlers:
   script: auto
 
 resources:
-  cpu: 4
-  memory_gb: 8
+  cpu: 64
+  memory_gb: 64
