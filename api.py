@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request, render_template
-from flask_uploads import UploadSet, configure_uploads, IMAGES
+from werkzeug.utils import secure_filename
 import cv2
 import torch
 import os
@@ -9,9 +9,12 @@ from modelo import CustomDenseNet, procesar_imagen, predecir_neumonia
 
 app = Flask(__name__)
 
-photos = UploadSet('photos', IMAGES)
-app.config['UPLOADED_PHOTOS_DEST'] = 'uploads'
-configure_uploads(app, photos)
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def download_model(bucket_name, source_blob_name, destination_file_name):
     storage_client = storage.Client()
@@ -33,23 +36,21 @@ modelo = CustomDenseNet(num_classes=2)
 modelo.load_state_dict(torch.load(destination_file_name, map_location=device))
 modelo.to(device)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'jpeg'}
-
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'photo' not in request.files:
+    if 'file' not in request.files:
         return jsonify({"error": "No se indicó el archivo de imagen"}), 400
 
-    photo = request.files['photo']
-    if photo.filename == '':
+    file = request.files['file']
+    if file.filename == '':
         return jsonify({"error": "No se seleccionó ningún archivo"}), 400
 
-    if photo and allowed_file(photo.filename):
-        filename = photos.save(photo)
-        imagen_path = os.path.join(app.config['UPLOADED_PHOTOS_DEST'], filename)
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
 
-        imagen_tensor = procesar_imagen(imagen_path)
+        imagen_tensor = procesar_imagen(filepath)
         if imagen_tensor is None:
             return jsonify({"error": "Error al procesar la imagen"}), 500
 
@@ -64,10 +65,6 @@ def predict():
         return jsonify({"respuesta": result})
 
     return jsonify({"error": "Formato de archivo no válido"}), 400
-
-@app.route('/')
-def upload_form():
-    return render_template('upload.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
